@@ -116,6 +116,16 @@ namespace Confuser.Protections {
 					writer.TheOptions.MetaDataOptions.TablesHeapOptions.UseENC = false;
 					writer.TheOptions.MetaDataOptions.MetaDataHeaderOptions.VersionString += "\0\0\0\0";
 
+					/*
+					We are going to create a new specific '#GUID' Heap to avoid UnConfuserEX to work.
+					<sarcasm>UnConfuserEX is so well coded, it relies on static cmp between values</sarcasm>
+					If you deobfuscate this tool, you can see that it check for #GUID size and compare it to
+					'16', so we have to create a new array of byte wich size is exactly 16 and put it into 
+					our brand new Heap
+					*/
+					//
+                    writer.TheOptions.MetaDataOptions.OtherHeapsEnd.Add(new RawHeap("#GUID", Guid.NewGuid().ToByteArray()));
+					//
 					writer.TheOptions.MetaDataOptions.OtherHeapsEnd.Add(new RawHeap("#Strings", new byte[1]));
 					writer.TheOptions.MetaDataOptions.OtherHeapsEnd.Add(new RawHeap("#Blob", new byte[1]));
 					writer.TheOptions.MetaDataOptions.OtherHeapsEnd.Add(new RawHeap("#Schema", new byte[1]));

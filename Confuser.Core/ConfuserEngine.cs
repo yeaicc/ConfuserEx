@@ -135,7 +135,7 @@ namespace Confuser.Core {
 				MarkerResult markings = marker.MarkProject(parameters.Project, context);
 				context.Modules = markings.Modules.ToList().AsReadOnly();
 				foreach (var module in context.Modules)
-					module.EnableTypeDefFindCache = true;
+					module.EnableTypeDefFindCache = false;
 				context.OutputModules = Enumerable.Repeat<byte[]>(null, markings.Modules.Count).ToArray();
 				context.OutputSymbols = Enumerable.Repeat<byte[]>(null, markings.Modules.Count).ToArray();
 				context.OutputPaths = Enumerable.Repeat<string>(null, markings.Modules.Count).ToArray();
@@ -334,7 +334,7 @@ namespace Confuser.Core {
 			context.CurrentModuleWriterListener.OnWriterEvent += (sender, e) => context.CheckCancellation();
 			context.CurrentModuleWriterOptions = new ModuleWriterOptions(context.CurrentModule, context.CurrentModuleWriterListener);
 
-			if (!context.CurrentModule.IsILOnly)
+			if (!context.CurrentModule.IsILOnly || context.CurrentModule.VTableFixups != null)
 				context.RequestNative();
 			
 			var snKey = context.Annotations.Get<StrongNameKey>(context.CurrentModule, Marker.SNKey);

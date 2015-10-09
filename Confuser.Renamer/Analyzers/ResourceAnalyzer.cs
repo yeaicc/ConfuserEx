@@ -36,6 +36,7 @@ namespace Confuser.Renamer.Analyzers {
 						context.Logger.WarnFormat("Could not find resource type '{0}'.", typeName);
 						continue;
 					}
+					service.ReduceRenameMode(type, RenameMode.ASCII);
 					service.AddReference(type, new ResourceReference(res, type, format));
 				}
 			}
@@ -43,7 +44,7 @@ namespace Confuser.Renamer.Analyzers {
 				string format = "{0}.resources";
 				foreach (Resource res in module.Resources) {
 					Match match = ResourceNamePattern.Match(res.Name);
-					if (!match.Success)
+					if (!match.Success || res.ResourceType != ResourceType.Embedded)
 						continue;
 					string typeName = match.Groups[1].Value;
 
@@ -55,6 +56,7 @@ namespace Confuser.Renamer.Analyzers {
 						context.Logger.WarnFormat("Could not find resource type '{0}'.", typeName);
 						continue;
 					}
+					service.ReduceRenameMode(type, RenameMode.ASCII);
 					service.AddReference(type, new ResourceReference(res, type, format));
 				}
 			}

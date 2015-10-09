@@ -3,11 +3,10 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using Confuser.Core;
 
-namespace Confuser.CLI {
+namespace Confuser.Core {
 	internal struct ObfAttrParser {
-		IDictionary items;
+		readonly IDictionary items;
 
 		string str;
 		int index;
@@ -108,7 +107,7 @@ namespace Confuser.CLI {
 
 						var preset = (ProtectionPreset)Enum.Parse(typeof(ProtectionPreset), buffer.ToString(), true);
 						foreach (var item in items.Values.OfType<Protection>().Where(prot => prot.Preset <= preset)) {
-							if (!settings.ContainsKey(item))
+							if (settings != null && !settings.ContainsKey(item))
 								settings.Add(item, new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
 						}
 						buffer.Length = 0;
@@ -182,12 +181,14 @@ namespace Confuser.CLI {
 						break;
 
 					case ParseState.EndItem:
-						if (protAct) {
-							settings[(Protection)items[protId]] = protParams;
-							protParams = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+						if (settings != null) {
+							if (protAct) {
+								settings[(Protection)items[protId]] = protParams;
+								protParams = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+							}
+							else
+								settings.Remove((Protection)items[protId]);
 						}
-						else
-							settings.Remove((Protection)items[protId]);
 
 						if (IsEnd())
 							state = ParseState.End;
@@ -220,8 +221,7 @@ namespace Confuser.CLI {
 			while (state != ParseState.End) {
 				switch (state) {
 					case ParseState.ReadItemName:
-						if (!ReadId(buffer))
-							throw new ArgumentException("Unexpected end of string in ReadItemName state.");
+						ReadId(buffer);
 
 						packer = (Packer)items[buffer.ToString()];
 						buffer.Length = 0;

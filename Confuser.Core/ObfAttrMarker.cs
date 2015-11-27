@@ -118,7 +118,7 @@ namespace Confuser.Core {
 
 				bool ok = true;
 				try {
-					new ObfAttrParser().ParseProtectionString(null, info.Settings);
+					new ObfAttrParser(protections).ParseProtectionString(null, info.Settings);
 				}
 				catch {
 					ok = false;
@@ -179,7 +179,7 @@ namespace Confuser.Core {
 		}
 
 		static readonly Regex NSPattern = new Regex("namespace '([^']*)'");
-		static readonly Regex NSInModulePattern = new Regex("namespace '([^']*)' in module '([^'])'");
+		static readonly Regex NSInModulePattern = new Regex("namespace '([^']*)' in module '([^']*)'");
 
 		Dictionary<string, Dictionary<Regex, List<ObfuscationAttributeInfo>>> crossModuleAttrs;
 		ConfuserContext context;
@@ -243,6 +243,66 @@ namespace Confuser.Core {
 			return new MarkerResult(modules.Select(module => module.Item2).ToList(), packer, extModules);
 		}
 
+		class RuleAdaptor : ProtectionSettings, IDictionary<ConfuserComponent, Dictionary<string, string>> {
+			Rule rule;
+			public RuleAdaptor(string pattern) {
+				this.rule = new Rule(pattern, ProtectionPreset.None, true);
+			}
+
+			public Rule Rule { get { return rule; } }
+
+			bool IDictionary<ConfuserComponent, Dictionary<string, string>>.ContainsKey(ConfuserComponent key) {
+				return true;
+			}
+
+			void IDictionary<ConfuserComponent, Dictionary<string, string>>.Add(ConfuserComponent key, Dictionary<string, string> value) {
+				var item = new SettingItem<Protection>(key.Id, SettingItemAction.Add);
+				foreach (var entry in value)
+					item.Add(entry.Key, entry.Value);
+				rule.Add(item);
+			}
+
+			bool IDictionary<ConfuserComponent, Dictionary<string, string>>.Remove(ConfuserComponent key) {
+				var item = new SettingItem<Protection>(key.Id, SettingItemAction.Remove);
+				rule.Add(item);
+				return true;
+			}
+
+			Dictionary<string, string> IDictionary<ConfuserComponent, Dictionary<string, string>>.this[ConfuserComponent key] {
+				get { return null; }
+				set {
+					rule.RemoveWhere(i => i.Id == key.Id);
+					var item = new SettingItem<Protection>(key.Id, SettingItemAction.Add);
+					foreach (var entry in value)
+						item.Add(entry.Key, entry.Value);
+					rule.Add(item);
+				}
+			}
+		}
+
+		void AddRule(ObfuscationAttributeInfo attr, Rules rules) {
+			Debug.Assert(attr.FeatureName != null && attr.FeatureName.StartsWith("@"));
+
+			var pattern = attr.FeatureName.Substring(1);
+			PatternExpression expr;
+			try {
+				expr = new PatternParser().Parse(pattern);
+			}
+			catch (Exception ex) {
+				throw new Exception("Error when parsing pattern " + pattern + " in ObfuscationAttribute", ex);
+			}
+
+			var ruleAdaptor = new RuleAdaptor(pattern);
+			try {
+				new ObfAttrParser(protections).ParseProtectionString(ruleAdaptor, attr.FeatureValue);
+			}
+			catch (Exception ex) {
+				throw new Exception("Error when parsing rule " + attr.FeatureValue + " in ObfuscationAttribute", ex);
+			}
+
+			rules.Add(ruleAdaptor.Rule, expr);
+		}
+
 		void MarkModule(ProjectModule projModule, ModuleDefMD module, Rules rules, bool isMain) {
 			var settingAttrs = new List<ObfuscationAttributeInfo>();
 			string snKeyPath = projModule.SNKeyPath, snKeyPass = projModule.SNKeyPassword;
@@ -283,6 +343,11 @@ namespace Confuser.Core {
 					extModules.Add(rawModule);
 				}
 				else {
+					if (attr.FeatureName.StartsWith("@")) {
+						AddRule(attr, rules);
+						continue;
+					}
+
 					var match = NSInModulePattern.Match(attr.FeatureName);
 					if (match.Success) {
 						if (!isMain)
@@ -421,7 +486,23 @@ namespace Confuser.Core {
 		void ProcessMember(IDnlibDef member, Rules rules, ProtectionSettingsStack stack) {
 			stack.Push(ProcessAttributes(ReadObfuscationAttributes(member)));
 			ApplySettings(member, rules, stack.GetInfos());
+			ProcessBody(member as MethodDef, rules, stack);
 			stack.Pop();
+		}
+
+		void ProcessBody(MethodDef method, Rules rules, ProtectionSettingsStack stack) {
+			if (method == null || method.Body == null)
+				return;
+
+			var declType = method.DeclaringType;
+			foreach (var instr in method.Body.Instructions)
+				if (instr.Operand is MethodDef) {
+					var cgType = ((MethodDef)instr.Operand).DeclaringType;
+					if (cgType.DeclaringType == declType && cgType.IsCompilerGenerated()) {
+						ApplySettings(cgType, rules, stack.GetInfos());
+						ProcessTypeMembers(cgType, rules, stack);
+					}
+				}
 		}
 	}
 }

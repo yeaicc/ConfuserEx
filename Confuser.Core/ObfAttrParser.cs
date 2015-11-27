@@ -83,7 +83,7 @@ namespace Confuser.Core {
 			return index == str.Length;
 		}
 
-		public void ParseProtectionString(ProtectionSettings settings, string str) {
+		public void ParseProtectionString(IDictionary<ConfuserComponent, Dictionary<string, string>> settings, string str) {
 			if (str == null)
 				return;
 
@@ -202,13 +202,16 @@ namespace Confuser.Core {
 
 					case ParseState.EndItem:
 						if (settings != null) {
+							if (!items.Contains(protId))
+								throw new KeyNotFoundException("Cannot find protection with id '" + protId + "'.");
+
 							if (protAct) {
 								settings[(Protection)items[protId]] = protParams;
-								protParams = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 							}
 							else
 								settings.Remove((Protection)items[protId]);
 						}
+						protParams = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
 						if (IsEnd())
 							state = ParseState.End;
@@ -243,7 +246,11 @@ namespace Confuser.Core {
 					case ParseState.ReadItemName:
 						ReadId(buffer);
 
-						packer = (Packer)items[buffer.ToString()];
+						var packerId = buffer.ToString();
+						if (!items.Contains(packerId))
+							throw new KeyNotFoundException("Cannot find packer with id '" + packerId + "'.");
+
+						packer = (Packer)items[packerId];
 						buffer.Length = 0;
 
 						if (IsEnd() || Peek() == ';')

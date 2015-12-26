@@ -144,18 +144,17 @@ namespace Confuser.Protections.Constants {
 		}
 
 		void EncodeConstant64(CEContext moduleCtx, uint hi, uint lo, TypeSig valueType, List<Tuple<MethodDef, Instruction>> references) {
-			int buffIndex = moduleCtx.EncodedBuffer.IndexOf(hi);
-			while (buffIndex != -1) {
-				if (moduleCtx.EncodedBuffer[buffIndex + 1] == lo)
+			int buffIndex = -1;
+			do {
+				buffIndex = moduleCtx.EncodedBuffer.IndexOf(lo, buffIndex + 1);
+				if (buffIndex + 1 < moduleCtx.EncodedBuffer.Count && moduleCtx.EncodedBuffer[buffIndex + 1] == hi)
 					break;
-				buffIndex = moduleCtx.EncodedBuffer.IndexOf(hi, buffIndex + 1);
-				if (buffIndex + 1 >= moduleCtx.EncodedBuffer.Count)
-					buffIndex = -1;
-			}
+			} while (buffIndex >= 0);
+			
 			if (buffIndex == -1) {
 				buffIndex = moduleCtx.EncodedBuffer.Count;
-				moduleCtx.EncodedBuffer.Add(hi);
 				moduleCtx.EncodedBuffer.Add(lo);
+				moduleCtx.EncodedBuffer.Add(hi);
 			}
 
 			UpdateReference(moduleCtx, valueType, references, buffIndex, desc => desc.NumberID);
@@ -225,7 +224,7 @@ namespace Confuser.Protections.Constants {
 					continue;
 
 				moduleCtx.Elements = 0;
-				string elements = parameters.GetParameter(context, context.CurrentModule, "elements", "SI");
+				string elements = parameters.GetParameter(context, method, "elements", "SI");
 				foreach (char elem in elements)
 					switch (elem) {
 						case 'S':

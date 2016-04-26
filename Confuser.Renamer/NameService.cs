@@ -145,6 +145,13 @@ namespace Confuser.Renamer {
 			analyze.Analyze(this, context, ProtectionParameters.Empty, def, true);
 		}
 
+		public void SetNameId(uint id) {
+			for (int i = nameId.Length - 1; i >= 0; i--) {
+				nameId[i] = (byte)(id & 0xff);
+				id >>= 8;
+			}
+		}
+
 		void IncrementNameId() {
 			for (int i = nameId.Length - 1; i >= 0; i--) {
 				nameId[i]++;
@@ -165,18 +172,40 @@ namespace Confuser.Renamer {
 					return Utils.EncodeString(hash, asciiCharset);
 				case RenameMode.Decodable:
 					IncrementNameId();
-					return Utils.EncodeString(hash, alphaNumCharset);
+					return "_" + Utils.EncodeString(hash, alphaNumCharset);
 				case RenameMode.Sequential:
 					IncrementNameId();
-					return Utils.EncodeString(nameId, alphaNumCharset);
+					return "_" + Utils.EncodeString(nameId, alphaNumCharset);
 				default:
 
 					throw new NotSupportedException("Rename mode '" + mode + "' is not supported.");
 			}
 		}
 
+		string ParseGenericName(string name, out int? count) {
+			if (name.LastIndexOf('`') != -1) {
+				int index = name.LastIndexOf('`');
+				int c;
+				if (int.TryParse(name.Substring(index + 1), out c)) {
+					count = c;
+					return name.Substring(0, index);
+				}
+			}
+			count = null;
+			return name;
+		}
+
+		string MakeGenericName(string name, int? count) {
+			if (count == null)
+				return name;
+			else
+				return string.Format("{0}`{1}", name, count.Value);
+		}
+
 		public string ObfuscateName(string name, RenameMode mode) {
 			string newName = null;
+			int? count;
+			name = ParseGenericName(name, out count);
 
 			if (string.IsNullOrEmpty(name))
 				return string.Empty;
@@ -189,7 +218,7 @@ namespace Confuser.Renamer {
 				if (reversibleRenamer == null)
 					throw new ArgumentException("Password not provided for reversible renaming.");
 				newName = reversibleRenamer.Encrypt(name);
-				return newName;
+				return MakeGenericName(newName, count);
 			}
 
 			if (nameMap1.ContainsKey(name))
@@ -198,7 +227,7 @@ namespace Confuser.Renamer {
 			byte[] hash = Utils.Xor(Utils.SHA1(Encoding.UTF8.GetBytes(name)), nameSeed);
 			for (int i = 0; i < 100; i++) {
 				newName = ObfuscateNameInternal(hash, mode);
-				if (!identifiers.Contains(newName))
+				if (!identifiers.Contains(MakeGenericName(newName, count)))
 					break;
 				hash = Utils.SHA1(hash);
 			}
@@ -208,7 +237,7 @@ namespace Confuser.Renamer {
 				nameMap1[name] = newName;
 			}
 
-			return newName;
+			return MakeGenericName(newName, count);
 		}
 
 		public string RandomName() {
